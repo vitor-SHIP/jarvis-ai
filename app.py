@@ -20,23 +20,15 @@ if not groq_key:
 
 client = Groq(api_key=groq_key) if groq_key else None
 
-# --- BANCO DE DADOS ---
+# --- BANCO DE DADOS LIMPO ---
 def init_db():
   try:
       conn = sqlite3.connect("jarvis_chat.db")
       cursor = conn.cursor()
-      cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chats'")
-      tabela_existe = cursor.fetchone()
-      
-      if tabela_existe:
-          cursor.execute("PRAGMA table_info(chats)")
-          colunas = [col[1] for col in cursor.fetchall()]
-          if "content_type" not in colunas:
-              cursor.execute("DROP TABLE chats")
-              conn.commit()
-
+      # Força a recriação limpa para evitar conflitos de formato antigo
+      cursor.execute("DROP TABLE IF EXISTS chats")
       cursor.execute("""
-            CREATE TABLE IF NOT EXISTS chats (
+            CREATE TABLE chats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 chat_name TEXT,
                 role TEXT,
@@ -46,22 +38,8 @@ def init_db():
         """)
       conn.commit()
       conn.close()
-  except Exception:
-      if os.path.exists("jarvis_chat.db"):
-          os.remove("jarvis_chat.db")
-      conn = sqlite3.connect("jarvis_chat.db")
-      cursor = conn.cursor()
-      cursor.execute("""
-            CREATE TABLE IF NOT EXISTS chats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                chat_name TEXT,
-                role TEXT,
-                content TEXT,
-                content_type TEXT DEFAULT 'text'
-            )
-        """)
-      conn.commit()
-      conn.close()
+  except Exception as e:
+      print(f"Erro no banco: {e}")
 
 init_db()
 
@@ -214,7 +192,6 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
   conteudo_mensagem = []
   tem_imagem = False
 
-  # Processa imagens enviadas por arquivo
   if uploaded_images:
       for img_file in uploaded_images:
           try:
@@ -234,7 +211,6 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
           except Exception as e:
               st.error(f"Erro ao processar arquivo: {e}")
 
-  # Processa foto tirada pela câmera
   if camera_image:
       try:
           image = Image.open(camera_image)
@@ -271,20 +247,17 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
           try:
               mensagens_formatadas = [{
                   "role": "system",
-                  "content": "Você é o Jarvis, uma inteligência artificial avançada e prestativa. Responda de forma direta e concisa, conforme necessário."
+                  "content": "Você é o Jarvis, uma inteligência artificial avançada e prestativa. Responda de forma direta e concisa."
               }]
 
               for m in mensagens_atuais:
                   content_val = m["content"]
                   
-                  # Converte histórico antigo de texto simples para o formato de lista compatível
-                  if isinstance(content_val, str):
-                      content_val = [{"type": "text", "text": content_val}]
-                  
-                  mensagens_formatadas.append({
-                      "role": m["role"], 
-                      "content": content_val
-                  })
+                  # Garante formato estrito exigido pelo Llama (string para texto puro, lista para multimodais)
+                  if isinstance(content_val, list):
+                      mensagens_formatadas.append({"role": m["role"], "content": content_val})
+                  else:
+                      mensagens_formatadas.append({"role": m["role"], "content": str(content_val)})
 
               chat_completion = client.chat.completions.create(
                   messages=mensagens_formatadas,
