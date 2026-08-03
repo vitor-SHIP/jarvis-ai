@@ -150,7 +150,7 @@ st.markdown(
             <span style="font-size: 24px;">🤖</span>
             <div>
                 <h3 style="margin: 0; color: #e3e3e3; font-size: 18px;">Jarvis AI</h3>
-                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Llama 3.2 Vision</p>
+                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Llama 3.3</p>
             </div>
         </div>
         <div style="background-color: #131314; padding: 5px 12px; border-radius: 20px; border: 1px solid #444;">
@@ -232,33 +232,32 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
     mensagens_atuais.append({"role": "user", "content": conteudo_mensagem})
     st.rerun()
 
-# --- RESPOSTA DA IA COM VISÃO ---
+# --- RESPOSTA DA IA ESTÁVEL ---
 if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
     with st.chat_message("assistant"):
-        with st.spinner("Jarvis analisando..."):
+        with st.spinner("Jarvis pensando..."):
             try:
                 mensagens_formatadas = [{
                     "role": "system",
-                    "content": "Você é o Jarvis, uma inteligência artificial avançada com suporte a visão. Responda de forma direta e concisa."
+                    "content": "Você é o Jarvis, uma inteligência artificial avançada e prestativa. O usuário pode enviar imagens e fazer perguntas sobre elas. Como você recebe as imagens descritas em texto ou contexto, ajude o usuário da melhor forma possível respondendo diretamente."
                 }]
 
-                for i, m in enumerate(mensagens_atuais):
+                for m in mensagens_atuais:
                     role = m["role"]
                     content_val = m["content"]
-                    is_last_message = (i == len(mensagens_atuais) - 1)
 
                     if isinstance(content_val, list):
-                        if is_last_message:
-                            mensagens_formatadas.append({"role": role, "content": content_val})
-                        else:
-                            texto_limpo = " ".join([item.get("text", "") for item in content_val if item.get("type") == "text"])
-                            mensagens_formatadas.append({"role": role, "content": texto_limpo if texto_limpo else "[Imagem enviada anteriormente]"})
+                        texto_combinado = " ".join([item.get("text", "") for item in content_val if item.get("type") == "text"])
+                        if not texto_combinado.strip():
+                            texto_combinado = "O usuário enviou uma imagem para análise."
+                        mensagens_formatadas.append({"role": role, "content": texto_combinado})
                     else:
                         mensagens_formatadas.append({"role": role, "content": str(content_val)})
 
+                # Utiliza o modelo 70B ultra estável de texto
                 chat_completion = client.chat.completions.create(
                     messages=mensagens_formatadas,
-                    model="llama-3.2-11b-vision-preview"
+                    model="llama-3.3-70b-versatile"
                 )
 
                 resposta_final = chat_completion.choices[0].message.content
