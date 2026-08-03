@@ -243,23 +243,29 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
                   "content": "Você é o Jarvis, uma inteligência artificial avançada e prestativa. Responda de forma direta e concisa."
               }]
 
-              # Percorre o histórico e trata mensagens antigas para evitar erro de formato na API
+              # TRATAMENTO DO HISTÓRICO PARA API
               for i, m in enumerate(mensagens_atuais):
                   role = m["role"]
                   content_val = m["content"]
-                  is_last = (i == len(mensagens_atuais) - 1)
+                  is_last_message = (i == len(mensagens_atuais) - 1)
 
                   if isinstance(content_val, list):
-                      if is_last:
-                          # Mantém a imagem apenas na ÚLTIMA mensagem enviada
+                      if is_last_message:
+                          # Na ÚLTIMA mensagem, envia a estrutura completa (texto + imagem)
                           mensagens_formatadas.append({"role": role, "content": content_val})
                       else:
-                          # Converte mensagens antigas com imagem apenas para texto para a API não rejeitar
-                            texto_acumulado = " ".join([item["text"] for item in content_val if item.get("type") == "text"])
-                            if not texto_acumulado:
-                                texto_acumulado = "[Imagem enviada anteriormente]"
-                            mensagens_formatadas.append({"role": role, "content": texto_acumulado})
+                          # Nas mensagens ANTERIORES, extrai APENAS o texto para evitar erro na API
+                          texto_limpo = ""
+                          for item in content_val:
+                              if item.get("type") == "text":
+                                  texto_limpo += item.get("text", "") + " "
+                          
+                          if texto_limpo.strip():
+                              mensagens_formatadas.append({"role": role, "content": texto_limpo.strip()})
+                          else:
+                              mensagens_formatadas.append({"role": role, "content": "[Imagem enviada anteriormente]"})
                   else:
+                      # Se o conteúdo já for texto simples, envia normal
                       mensagens_formatadas.append({"role": role, "content": str(content_val)})
 
               chat_completion = client.chat.completions.create(
