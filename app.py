@@ -158,13 +158,16 @@ with st.sidebar:
                   st.rerun()
 
   st.markdown("---")
-  st.markdown("### 🖼️ Anexar Imagem")
+  st.markdown("### 🖼️ Enviar ou Tirar Foto")
+  
   uploaded_images = st.file_uploader(
-      "Selecione arquivo",
+      "Carregar arquivo",
       type=["jpg", "jpeg", "png"],
       accept_multiple_files=True,
-      label_visibility="collapsed",
+      label_visibility="collapsed"
   )
+  
+  camera_image = st.camera_input("Tirar foto")
 
 # --- TOPO PERSONALIZADO ---
 st.markdown(
@@ -193,7 +196,7 @@ mensagens_atuais = st.session_state.chats[st.session_state.current_chat]
 
 if not mensagens_atuais:
   st.markdown("<h2 style='text-align: center; color: #c4c7c5; margin-top: 10vh;'>Olá, Flávio.</h2>", unsafe_allow_html=True)
-  st.markdown("<p style='text-align: center; color: #8e918f;'>Como posso ajudar você hoje? Envie um texto ou anexe uma imagem.</p>", unsafe_allow_html=True)
+  st.markdown("<p style='text-align: center; color: #8e918f;'>Como posso ajudar você hoje? Envie um texto, anexe uma imagem ou tire uma foto.</p>", unsafe_allow_html=True)
 
 for message in mensagens_atuais:
   with st.chat_message(message["role"]):
@@ -205,12 +208,13 @@ for message in mensagens_atuais:
               elif item.get("type") == "image_url":
                   st.image(item["image_url"]["url"], width=300)
       else:
-          st.markdown(content)
+          st.markdown(str(content))
 
 if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
   conteudo_mensagem = []
   tem_imagem = False
 
+  # Processa imagens enviadas por arquivo
   if uploaded_images:
       for img_file in uploaded_images:
           try:
@@ -228,31 +232,52 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
               salvar_mensagem_banco(st.session_state.current_chat, "user", base64_img, 'image_base64')
               tem_imagem = True
           except Exception as e:
-              st.error(f"Erro ao processar a imagem: {e}")
+              st.error(f"Erro ao processar arquivo: {e}")
+
+  # Processa foto tirada pela câmera
+  if camera_image:
+      try:
+          image = Image.open(camera_image)
+          if image.mode != "RGB":
+              image = image.convert("RGB")
+          image.thumbnail((1024, 1024))
+          
+          buffered = BytesIO()
+          image.save(buffered, format="JPEG", quality=85)
+          base64_img = base64.b64encode(buffered.getvalue()).decode("utf-8")
+          
+          img_url = f"data:image/jpeg;base64,{base64_img}"
+          conteudo_mensagem.append({"type": "image_url", "image_url": {"url": img_url}})
+          salvar_mensagem_banco(st.session_state.current_chat, "user", base64_img, 'image_base64')
+          tem_imagem = True
+      except Exception as e:
+          st.error(f"Erro ao processar foto da câmera: {e}")
 
   if prompt:
       conteudo_mensagem.append({"type": "text", "text": prompt})
       salvar_mensagem_banco(st.session_state.current_chat, "user", prompt, 'text')
   elif tem_imagem:
-      texto_padrao = "Analise esta imagem para mim."
+      texto_padrao = "Analise esta foto para mim."
       conteudo_mensagem.append({"type": "text", "text": texto_padrao})
       salvar_mensagem_banco(st.session_state.current_chat, "user", texto_padrao, 'text')
 
   mensagens_atuais.append({"role": "user", "content": conteudo_mensagem})
   st.rerun()
 
-# --- RESPOSTA DA IA ULTRA-RÁPIDA ---
+# --- RESPOSTA DA IA ---
 if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
   with st.chat_message("assistant"):
       with st.spinner("Jarvis pensando..."):
           try:
               mensagens_formatadas = [{
                   "role": "system",
-                  "content": "Você é o Jarvis, uma inteligência artificial avançada e prestativa. Responda de forma direta e concisa."
+                  "content": "Você é o Jarvis, uma inteligência artificial avançada e prestativa. Responda de forma direta e concisa, conforme necessário."
               }]
 
               for m in mensagens_atuais:
                   content_val = m["content"]
+                  
+                  # Converte histórico antigo de texto simples para o formato de lista compatível
                   if isinstance(content_val, str):
                       content_val = [{"type": "text", "text": content_val}]
                   
