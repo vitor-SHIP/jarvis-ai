@@ -150,7 +150,7 @@ st.markdown(
             <span style="font-size: 24px;">🤖</span>
             <div>
                 <h3 style="margin: 0; color: #e3e3e3; font-size: 18px;">Jarvis AI</h3>
-                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Llama 3.3</p>
+                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Llama Vision</p>
             </div>
         </div>
         <div style="background-color: #131314; padding: 5px 12px; border-radius: 20px; border: 1px solid #444;">
@@ -223,27 +223,24 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
             st.error(f"Erro ao processar foto da câmera: {e}")
 
     if prompt:
-        if tem_imagem:
-            texto_prompt = f"O usuário enviou uma imagem/print e disse: '{prompt}'. Analise o contexto da pergunta considerando a imagem enviada."
-        else:
-            texto_prompt = prompt
-        conteudo_mensagem.append({"type": "text", "text": texto_prompt})
+        conteudo_mensagem.append({"type": "text", "text": prompt})
     elif tem_imagem:
-        conteudo_mensagem.append({"type": "text", "text": "O usuário enviou uma imagem/print. Ajude-o a identificar o elemento mostrado."})
+        conteudo_mensagem.append({"type": "text", "text": "O que é isso na imagem?"})
 
     conteudo_json = json.dumps(conteudo_mensagem)
     salvar_mensagem_banco(st.session_state.current_chat, "user", conteudo_json)
     mensagens_atuais.append({"role": "user", "content": conteudo_mensagem})
     st.rerun()
 
-# --- RESPOSTA DA IA BLINDADA ---
+# --- RESPOSTA DA IA COM SUPORTE VISUAL REAL ---
 if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
     with st.chat_message("assistant"):
-        with st.spinner("Jarvis processando..."):
+        with st.spinner("Jarvis analisando a imagem..."):
             try:
+                # Prepara as mensagens no formato multimodal aceito pela API da Groq
                 mensagens_formatadas = [{
                     "role": "system",
-                    "content": "Você é o Jarvis, uma inteligência artificial avançada e assistente pessoal. Quando o usuário enviar imagens ou prints de jogos perguntando sobre itens, cabelos, skins ou elementos visuais, responda com base no seu conhecimento profundo sobre esses jogos e ajude-o."
+                    "content": "Você é o Jarvis, uma inteligência artificial avançada. Você tem capacidade de ver e analisar imagens enviadas pelo usuário (como prints de jogos, telas, itens, etc.). Seja direto, sagaz e ajude o usuário identificando exatamente o que ele mostrar."
                 }]
 
                 for m in mensagens_atuais:
@@ -251,16 +248,15 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
                     content_val = m["content"]
 
                     if isinstance(content_val, list):
-                        texto_combinado = " ".join([item.get("text", "") for item in content_val if item.get("type") == "text"])
-                        if not texto_combinado.strip():
-                            texto_combinado = "O usuário enviou uma imagem."
-                        mensagens_formatadas.append({"role": role, "content": texto_combinado})
+                        # Mantém a lista estruturada com texto e imagem para o modelo de visão processar
+                        mensagens_formatadas.append({"role": role, "content": content_val})
                     else:
                         mensagens_formatadas.append({"role": role, "content": str(content_val)})
 
+                # Usando o modelo de visão atualizado e funcional da Groq
                 chat_completion = client.chat.completions.create(
                     messages=mensagens_formatadas,
-                    model="llama-3.3-70b-versatile"
+                    model="meta-llama/llama-3.2-11b-vision-preview"
                 )
 
                 resposta_final = chat_completion.choices[0].message.content
@@ -270,4 +266,5 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
                 mensagens_atuais.append({"role": "assistant", "content": resposta_final})
 
             except Exception as e:
-                st.error(f"Erro na API: {e}")
+                st.error(f"Erro ao processar visão: {e}")
+                
