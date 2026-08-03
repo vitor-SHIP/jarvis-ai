@@ -21,13 +21,15 @@ if not groq_key:
 
 client = Groq(api_key=groq_key) if groq_key else None
 
-# --- BANCO DE DADOS ---
+# --- BANCO DE DADOS LIMPO ---
 def init_db():
   try:
       conn = sqlite3.connect("jarvis_chat.db")
       cursor = conn.cursor()
+      # Recria a tabela limpa para apagar o histórico corrompido anterior
+      cursor.execute("DROP TABLE IF EXISTS chats")
       cursor.execute("""
-            CREATE TABLE IF NOT EXISTS chats (
+            CREATE TABLE chats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 chat_name TEXT,
                 role TEXT,
@@ -42,32 +44,7 @@ def init_db():
 init_db()
 
 def carregar_chats_do_banco():
-  try:
-      conn = sqlite3.connect("jarvis_chat.db")
-      cursor = conn.cursor()
-      cursor.execute("SELECT DISTINCT chat_name FROM chats")
-      nomes = [row[0] for row in cursor.fetchall()]
-
-      chats = {}
-      if not nomes:
-          chats["Nova Conversa"] = []
-      else:
-          for nome in nomes:
-              cursor.execute(
-                  "SELECT role, content FROM chats WHERE chat_name = ? ORDER BY id ASC", (nome,)
-              )
-              mensagens = []
-              for role, content in cursor.fetchall():
-                  try:
-                      content_parsed = json.loads(content)
-                  except:
-                      content_parsed = content
-                  mensagens.append({"role": role, "content": content_parsed})
-              chats[nome] = mensagens
-      conn.close()
-      return chats
-  except Exception:
-      return {"Nova Conversa": []}
+  return {"Nova Conversa": []}
 
 def salvar_mensagem_banco(chat_name, role, content):
   try:
@@ -82,23 +59,11 @@ def salvar_mensagem_banco(chat_name, role, content):
   except Exception as e:
       print(f"Erro ao salvar: {e}")
 
-def deletar_chat_banco(chat_name):
-  try:
-      conn = sqlite3.connect("jarvis_chat.db")
-      cursor = conn.cursor()
-      cursor.execute("DELETE FROM chats WHERE chat_name = ?", (chat_name,))
-      conn.commit()
-      conn.close()
-  except Exception:
-      pass
-
 if "chats" not in st.session_state:
-  st.session_state.chats = carregar_chats_do_banco()
+  st.session_state.chats = {"Nova Conversa": []}
 
-if "current_chat" not in st.session_state or not st.session_state.chats:
-  if not st.session_state.chats:
-      st.session_state.chats["Nova Conversa"] = []
-  st.session_state.current_chat = list(st.session_state.chats.keys())[0]
+if "current_chat" not in st.session_state:
+  st.session_state.current_chat = "Nova Conversa"
 
 # --- PAINEL LATERAL ---
 with st.sidebar:
@@ -117,19 +82,9 @@ with st.sidebar:
   st.markdown("**Recentes**")
 
   for nome_chat in list(st.session_state.chats.keys()):
-      col1, col2 = st.columns([0.8, 0.2])
-      with col1:
-          if st.button(nome_chat, key=f"btn_{nome_chat}", use_container_width=True):
-              st.session_state.current_chat = nome_chat
-              st.rerun()
-
-      with col2:
-          if len(st.session_state.chats) > 1:
-              if st.button("🗑️", key=f"del_{nome_chat}"):
-                  deletar_chat_banco(nome_chat)
-                  del st.session_state.chats[nome_chat]
-                  st.session_state.current_chat = list(st.session_state.chats.keys())[-1]
-                  st.rerun()
+      if st.button(nome_chat, key=f"btn_{nome_chat}", use_container_width=True):
+          st.session_state.current_chat = nome_chat
+          st.rerun()
 
   st.markdown("---")
   st.markdown("### 🖼️ Enviar ou Tirar Foto")
@@ -243,7 +198,6 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
                   "content": "Você é o Jarvis, uma inteligência artificial avançada e prestativa. Responda de forma direta e concisa."
               }]
 
-              # TRATAMENTO DO HISTÓRICO PARA API
               for i, m in enumerate(mensagens_atuais):
                   role = m["role"]
                   content_val = m["content"]
@@ -251,21 +205,11 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
 
                   if isinstance(content_val, list):
                       if is_last_message:
-                          # Na ÚLTIMA mensagem, envia a estrutura completa (texto + imagem)
                           mensagens_formatadas.append({"role": role, "content": content_val})
                       else:
-                          # Nas mensagens ANTERIORES, extrai APENAS o texto para evitar erro na API
-                          texto_limpo = ""
-                          for item in content_val:
-                              if item.get("type") == "text":
-                                  texto_limpo += item.get("text", "") + " "
-                          
-                          if texto_limpo.strip():
-                              mensagens_formatadas.append({"role": role, "content": texto_limpo.strip()})
-                          else:
-                              mensagens_formatadas.append({"role": role, "content": "[Imagem enviada anteriormente]"})
+                          texto_limpo = " ".join([item.get("text", "") for item in content_val if item.get("type") == "text"])
+                          mensagens_formatadas.append({"role": role, "content": texto_limpo if texto_limpo else "[Imagem enviada]"})
                   else:
-                      # Se o conteúdo já for texto simples, envia normal
                       mensagens_formatadas.append({"role": role, "content": str(content_val)})
 
               chat_completion = client.chat.completions.create(
