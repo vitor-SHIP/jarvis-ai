@@ -20,20 +20,17 @@ if not groq_key:
 
 client = Groq(api_key=groq_key) if groq_key else None
 
-# --- BANCO DE DADOS LIMPO ---
+# --- BANCO DE DADOS ROBUSTO ---
 def init_db():
   try:
       conn = sqlite3.connect("jarvis_chat.db")
       cursor = conn.cursor()
-      # Força a recriação limpa para evitar conflitos de formato antigo
-      cursor.execute("DROP TABLE IF EXISTS chats")
       cursor.execute("""
-            CREATE TABLE chats (
+            CREATE TABLE IF NOT EXISTS chats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 chat_name TEXT,
                 role TEXT,
-                content TEXT,
-                content_type TEXT DEFAULT 'text'
+                content TEXT
             )
         """)
       conn.commit()
@@ -56,30 +53,24 @@ def carregar_chats_do_banco():
       else:
           for nome in nomes:
               cursor.execute(
-                  "SELECT role, content, content_type FROM chats WHERE chat_name = ? ORDER BY id ASC", (nome,)
+                  "SELECT role, content FROM chats WHERE chat_name = ? ORDER BY id ASC", (nome,)
               )
               mensagens = []
-              for role, content, content_type in cursor.fetchall():
-                  if content_type == 'image_base64':
-                      mensagens.append({
-                          "role": role,
-                          "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{content}"}}]
-                      })
-                  else:
-                      mensagens.append({"role": role, "content": content})
+              for role, content in cursor.fetchall():
+                  mensagens.append({"role": role, "content": content})
               chats[nome] = mensagens
       conn.close()
       return chats
   except Exception:
       return {"Nova Conversa": []}
 
-def salvar_mensagem_banco(chat_name, role, content, content_type='text'):
+def salvar_mensagem_banco(chat_name, role, content):
   try:
       conn = sqlite3.connect("jarvis_chat.db")
       cursor = conn.cursor()
       cursor.execute(
-          "INSERT INTO chats (chat_name, role, content, content_type) VALUES (?, ?, ?, ?)",
-          (chat_name, role, content, content_type),
+          "INSERT INTO chats (chat_name, role, content) VALUES (?, ?, ?)",
+          (chat_name, role, content),
       )
       conn.commit()
       conn.close()
@@ -206,7 +197,6 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
               
               img_url = f"data:image/jpeg;base64,{base64_img}"
               conteudo_mensagem.append({"type": "image_url", "image_url": {"url": img_url}})
-              salvar_mensagem_banco(st.session_state.current_chat, "user", base64_img, 'image_base64')
               tem_imagem = True
           except Exception as e:
               st.error(f"Erro ao processar arquivo: {e}")
@@ -224,19 +214,20 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
           
           img_url = f"data:image/jpeg;base64,{base64_img}"
           conteudo_mensagem.append({"type": "image_url", "image_url": {"url": img_url}})
-          salvar_mensagem_banco(st.session_state.current_chat, "user", base64_img, 'image_base64')
           tem_imagem = True
       except Exception as e:
           st.error(f"Erro ao processar foto da câmera: {e}")
 
   if prompt:
       conteudo_mensagem.append({"type": "text", "text": prompt})
-      salvar_mensagem_banco(st.session_state.current_chat, "user", prompt, 'text')
   elif tem_imagem:
-      texto_padrao = "Analise esta foto para mim."
-      conteudo_mensagem.append({"type": "text", "text": texto_padrao})
-      salvar_mensagem_banco(st.session_state.current_chat, "user", texto_padrao, 'text')
+      conteudo_mensagem.append({"type": "text", "text": "Analise esta imagem para mim."})
 
+  # Salva a estrutura completa em JSON no banco para garantir que nunca corrompa
+  import json
+  conteudo_json = json.dumps(conteudo_mensagem)
+  
+  salvar_mensagem_banco(st.session_state.current_chat, "user", conteudo_json)
   mensagens_atuais.append({"role": "user", "content": conteudo_mensagem})
   st.rerun()
 
@@ -253,11 +244,17 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
               for m in mensagens_atuais:
                   content_val = m["content"]
                   
-                  # Garante formato estrito exigido pelo Llama (string para texto puro, lista para multimodais)
-                  if isinstance(content_val, list):
-                      mensagens_formatadas.append({"role": m["role"], "content": content_val})
-                  else:
-                      mensagens_formatadas.append({"role": m["role"], "content": str(content_val)})
+                  # Se estiver em formato JSON salvo, converte para lista de blocos (texto/imagem)
+                  if isinstance(content_val, str):
+                      try:
+                          content_val = json.loads(content_val)
+                      except:
+                          content_val = content_val
+
+                  mensagens_formatadas.append({
+                      "role": m["role"], 
+                      "content": content_val
+                  })
 
               chat_completion = client.chat.completions.create(
                   messages=mensagens_formatadas,
@@ -267,7 +264,7 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
               resposta_final = chat_completion.choices[0].message.content
               st.markdown(resposta_final)
 
-              salvar_mensagem_banco(st.session_state.current_chat, "assistant", resposta_final, 'text')
+              salvar_mensagem_banco(st.session_state.current_chat, "assistant", resposta_final)
               mensagens_atuais.append({"role": "assistant", "content": resposta_final})
 
           except Exception as e:
