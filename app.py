@@ -150,7 +150,7 @@ st.markdown(
             <span style="font-size: 24px;">🤖</span>
             <div>
                 <h3 style="margin: 0; color: #e3e3e3; font-size: 18px;">Jarvis AI</h3>
-                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Llama 3.3</p>
+                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Vision Ativo</p>
             </div>
         </div>
         <div style="background-color: #131314; padding: 5px 12px; border-radius: 20px; border: 1px solid #444;">
@@ -223,41 +223,33 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
             st.error(f"Erro ao processar foto da câmera: {e}")
 
     if prompt:
-        texto_final = f"[Print do jogo Free Fire enviado pelo usuário]. Pergunta: {prompt}"
-        conteudo_mensagem.append({"type": "text", "text": texto_final})
+        conteudo_mensagem.append({"type": "text", "text": prompt})
     elif tem_imagem:
-        conteudo_mensagem.append({"type": "text", "text": "[Print do jogo Free Fire enviado pelo usuário]. O que é isso na imagem e qual a cor do cabelo do personagem?"})
+        conteudo_mensagem.append({"type": "text", "text": "O que tem nesta imagem?"})
 
     conteudo_json = json.dumps(conteudo_mensagem)
     salvar_mensagem_banco(st.session_state.current_chat, "user", conteudo_json)
     mensagens_atuais.append({"role": "user", "content": conteudo_mensagem})
     st.rerun()
 
-# --- RESPOSTA DA IA ESTÁVEL ---
+# --- RESPOSTA DA IA COM SUPORTE VISUAL REAL ---
 if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
     with st.chat_message("assistant"):
-        with st.spinner("Jarvis analisando..."):
+        with st.spinner("Jarvis analisando a imagem..."):
             try:
                 mensagens_formatadas = [{
                     "role": "system",
-                    "content": "Você é o Jarvis, uma inteligência artificial especialista em tecnologia e jogos, especialmente Free Fire. O usuário costuma mandar prints do Free Fire focando em personagens, skins, cores de cabelo, mapas ou itens. Responda diretamente e de forma prestativa, dando detalhes focados no jogo."
+                    "content": "Você é o Jarvis, uma inteligência artificial especialista em jogos, especialmente Free Fire. Analise as imagens enviadas pelo usuário e responda com precisão sobre o que aparece nelas (personagens, cores de cabelo, skins, itens, armas ou mapas)."
                 }]
 
                 for m in mensagens_atuais:
                     role = m["role"]
                     content_val = m["content"]
-
-                    if isinstance(content_val, list):
-                        texto_combinado = " ".join([item.get("text", "") for item in content_val if item.get("type") == "text"])
-                        if not texto_combinado.strip():
-                            texto_combinado = "O usuário enviou uma imagem do Free Fire."
-                        mensagens_formatadas.append({"role": role, "content": texto_combinado})
-                    else:
-                        mensagens_formatadas.append({"role": role, "content": str(content_val)})
+                    mensagens_formatadas.append({"role": role, "content": content_val})
 
                 chat_completion = client.chat.completions.create(
                     messages=mensagens_formatadas,
-                    model="llama-3.3-70b-versatile"
+                    model="meta-llama/llama-3.2-11b-vision-preview"
                 )
 
                 resposta_final = chat_completion.choices[0].message.content
@@ -267,4 +259,5 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
                 mensagens_atuais.append({"role": "assistant", "content": resposta_final})
 
             except Exception as e:
-                st.error(f"Erro na API: {e}")
+                st.error(f"Erro na API de Visão: {e}")
+                
