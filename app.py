@@ -20,12 +20,11 @@ if not groq_key:
 
 client = Groq(api_key=groq_key) if groq_key else None
 
-# --- BANCO DE DADOS (Com limpeza automática se houver erro) ---
+# --- BANCO DE DADOS ---
 def init_db():
   try:
       conn = sqlite3.connect("jarvis_chat.db")
       cursor = conn.cursor()
-      # Verifica se a tabela existe e tem a coluna content_type
       cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chats'")
       tabela_existe = cursor.fetchone()
       
@@ -33,7 +32,6 @@ def init_db():
           cursor.execute("PRAGMA table_info(chats)")
           colunas = [col[1] for col in cursor.fetchall()]
           if "content_type" not in colunas:
-              # Se a coluna não existe, recria a tabela para evitar conflitos
               cursor.execute("DROP TABLE chats")
               conn.commit()
 
@@ -49,7 +47,6 @@ def init_db():
       conn.commit()
       conn.close()
   except Exception:
-      # Se houver qualquer falha crítica, recria o banco limpo
       if os.path.exists("jarvis_chat.db"):
           os.remove("jarvis_chat.db")
       conn = sqlite3.connect("jarvis_chat.db")
@@ -177,7 +174,7 @@ st.markdown(
             <span style="font-size: 24px;">🤖</span>
             <div>
                 <h3 style="margin: 0; color: #e3e3e3; font-size: 18px;">Jarvis AI</h3>
-                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Llama 3.2 Vision</p>
+                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Llama Vision</p>
             </div>
         </div>
         <div style="background-color: #131314; padding: 5px 12px; border-radius: 20px; border: 1px solid #444;">
@@ -195,7 +192,7 @@ if st.session_state.current_chat not in st.session_state.chats:
 mensagens_atuais = st.session_state.chats[st.session_state.current_chat]
 
 if not mensagens_atuais:
-  st.markdown("<h2 style='text-align: center; color: #c4c7c5; margin-top: 10vh;'>Olá.</h2>", unsafe_allow_html=True)
+  st.markdown("<h2 style='text-align: center; color: #c4c7c5; margin-top: 10vh;'>Olá, Flávio.</h2>", unsafe_allow_html=True)
   st.markdown("<p style='text-align: center; color: #8e918f;'>Como posso ajudar você hoje? Envie um texto ou anexe uma imagem.</p>", unsafe_allow_html=True)
 
 for message in mensagens_atuais:
@@ -244,7 +241,7 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
   mensagens_atuais.append({"role": "user", "content": conteudo_mensagem})
   st.rerun()
 
-# --- RESPOSTA DA IA COM VISÃO ---
+# --- RESPOSTA DA IA COM VISÃO ATUALIZADA ---
 if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
   with st.chat_message("assistant"):
       with st.spinner("Jarvis analisando..."):
@@ -259,7 +256,7 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
 
               chat_completion = client.chat.completions.create(
                   messages=mensagens_formatadas,
-                  model="llama-3.2-11b-vision-preview"
+                  model="meta-llama/llama-3.2-90b-vision-instruct" # Modelo atualizado e ativo na Groq
               )
 
               resposta_final = chat_completion.choices[0].message.content
