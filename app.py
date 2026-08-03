@@ -222,24 +222,29 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
         except Exception as e:
             st.error(f"Erro ao processar foto da câmera: {e}")
 
+    # Instrução inteligente para o Jarvis entender o contexto da tela/print do jogo enviado
     if prompt:
-        conteudo_mensagem.append({"type": "text", "text": prompt})
+        if tem_imagem:
+            texto_prompt = f"O usuário enviou uma imagem/print (como do Free Fire) e disse: '{prompt}'. Analise o contexto da pergunta considerando que é uma imagem de jogo/tela."
+        else:
+            texto_prompt = prompt
+        conteudo_mensagem.append({"type": "text", "text": texto_prompt})
     elif tem_imagem:
-        conteudo_mensagem.append({"type": "text", "text": "Analise esta imagem para mim."})
+        conteudo_mensagem.append({"type": "text", "text": "O usuário enviou um print/imagem de jogo (provavelmente Free Fire). Ajude-o a identificar o item, skin, cabelo ou elemento visual mostrado."})
 
     conteudo_json = json.dumps(conteudo_mensagem)
     salvar_mensagem_banco(st.session_state.current_chat, "user", conteudo_json)
     mensagens_atuais.append({"role": "user", "content": conteudo_mensagem})
     st.rerun()
 
-# --- RESPOSTA DA IA ESTÁVEL ---
+# --- RESPOSTA DA IA BLINDADA ---
 if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
     with st.chat_message("assistant"):
-        with st.spinner("Jarvis pensando..."):
+        with st.spinner("Jarvis processando..."):
             try:
                 mensagens_formatadas = [{
                     "role": "system",
-                    "content": "Você é o Jarvis, uma inteligência artificial avançada e prestativa. O usuário pode enviar imagens e fazer perguntas sobre elas. Como você recebe as imagens descritas em texto ou contexto, ajude o usuário da melhor forma possível respondendo diretamente."
+                    "content": "Você é o Jarvis, uma inteligência artificial avançada e assistente pessoal de jogos e tecnologia. Quando o usuário enviar imagens ou prints de jogos como Free Fire perguntando sobre itens, cabelos, skins ou elementos visuais, responda com base no seu conhecimento profundo sobre esses jogos e ajude-o a identificar o nome exato do que ele está mostrando."
                 }]
 
                 for m in mensagens_atuais:
@@ -247,14 +252,13 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
                     content_val = m["content"]
 
                     if isinstance(content_val, list):
-                        texto_combinado = " ".join([item.get("text", "") for item in content_val if item.get("type") == "text"])
+                        texto_combinado = " ".join([item.get("text", "") for item in content_val if item.get("type"] == "text"])
                         if not texto_combinado.strip():
-                            texto_combinado = "O usuário enviou uma imagem para análise."
+                            texto_combinado = "O usuário enviou uma captura de tela do jogo."
                         mensagens_formatadas.append({"role": role, "content": texto_combinado})
                     else:
                         mensagens_formatadas.append({"role": role, "content": str(content_val)})
 
-                # Utiliza o modelo 70B ultra estável de texto
                 chat_completion = client.chat.completions.create(
                     messages=mensagens_formatadas,
                     model="llama-3.3-70b-versatile"
