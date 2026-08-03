@@ -251,7 +251,7 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
                     content_val = m["content"]
 
                     if isinstance(content_val, list):
-                        texto_combinado = " ".join([item.get("text", "") for item in content_val if item.get("type"] == "text" or item.get("type") == "text"))
+                        texto_combinado = " ".join([item.get("text", "") for item in content_val if item.get("type") == "text"])
                         if not texto_combinado.strip():
                             texto_combinado = "O usuário enviou um print do jogo Free Fire."
                         mensagens_formatadas.append({"role": role, "content": texto_combinado})
@@ -271,4 +271,3 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
 
             except Exception as e:
                 st.error(f"Erro na API: {e}")
-        
