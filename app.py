@@ -252,7 +252,15 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
               }]
 
               for m in mensagens_atuais:
-                  mensagens_formatadas.append({"role": m["role"], "content": m["content"]})
+                  content_val = m["content"]
+                  # Garante formato correto para a API do Qwen
+                  if isinstance(content_val, str):
+                      content_val = [{"type": "text", "text": content_val}]
+                  
+                  mensagens_formatadas.append({
+                      "role": m["role"], 
+                      "content": content_val
+                  })
 
               chat_completion = client.chat.completions.create(
                   messages=mensagens_formatadas,
