@@ -222,15 +222,14 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
         except Exception as e:
             st.error(f"Erro ao processar foto da câmera: {e}")
 
-    # Instrução inteligente para o Jarvis entender o contexto da tela/print do jogo enviado
     if prompt:
         if tem_imagem:
-            texto_prompt = f"O usuário enviou uma imagem/print (como do Free Fire) e disse: '{prompt}'. Analise o contexto da pergunta considerando que é uma imagem de jogo/tela."
+            texto_prompt = f"O usuário enviou uma imagem/print e disse: '{prompt}'. Analise o contexto da pergunta considerando a imagem enviada."
         else:
             texto_prompt = prompt
         conteudo_mensagem.append({"type": "text", "text": texto_prompt})
     elif tem_imagem:
-        conteudo_mensagem.append({"type": "text", "text": "O usuário enviou um print/imagem de jogo (provavelmente Free Fire). Ajude-o a identificar o item, skin, cabelo ou elemento visual mostrado."})
+        conteudo_mensagem.append({"type": "text", "text": "O usuário enviou uma imagem/print. Ajude-o a identificar o elemento mostrado."})
 
     conteudo_json = json.dumps(conteudo_mensagem)
     salvar_mensagem_banco(st.session_state.current_chat, "user", conteudo_json)
@@ -244,7 +243,7 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
             try:
                 mensagens_formatadas = [{
                     "role": "system",
-                    "content": "Você é o Jarvis, uma inteligência artificial avançada e assistente pessoal de jogos e tecnologia. Quando o usuário enviar imagens ou prints de jogos como Free Fire perguntando sobre itens, cabelos, skins ou elementos visuais, responda com base no seu conhecimento profundo sobre esses jogos e ajude-o a identificar o nome exato do que ele está mostrando."
+                    "content": "Você é o Jarvis, uma inteligência artificial avançada e assistente pessoal. Quando o usuário enviar imagens ou prints de jogos perguntando sobre itens, cabelos, skins ou elementos visuais, responda com base no seu conhecimento profundo sobre esses jogos e ajude-o."
                 }]
 
                 for m in mensagens_atuais:
@@ -252,9 +251,9 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
                     content_val = m["content"]
 
                     if isinstance(content_val, list):
-                        texto_combinado = " ".join([item.get("text", "") for item in content_val if item.get("type"] == "text"])
+                        texto_combinado = " ".join([item.get("text", "") for item in content_val if item.get("type") == "text"])
                         if not texto_combinado.strip():
-                            texto_combinado = "O usuário enviou uma captura de tela do jogo."
+                            texto_combinado = "O usuário enviou uma imagem."
                         mensagens_formatadas.append({"role": role, "content": texto_combinado})
                     else:
                         mensagens_formatadas.append({"role": role, "content": str(content_val)})
