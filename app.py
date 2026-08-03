@@ -150,7 +150,7 @@ st.markdown(
             <span style="font-size: 24px;">🤖</span>
             <div>
                 <h3 style="margin: 0; color: #e3e3e3; font-size: 18px;">Jarvis AI</h3>
-                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Llama Vision</p>
+                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Llama 3.3</p>
             </div>
         </div>
         <div style="background-color: #131314; padding: 5px 12px; border-radius: 20px; border: 1px solid #444;">
@@ -223,33 +223,44 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
             st.error(f"Erro ao processar foto da câmera: {e}")
 
     if prompt:
-        conteudo_mensagem.append({"type": "text", "text": prompt})
+        if tem_imagem:
+            texto_prompt = f"[Contexto da Imagem: O usuário enviou um print do jogo Free Fire exibindo elementos visuais, skins, cabelo ou itens]. Pergunta do usuário: {prompt}"
+        else:
+            texto_prompt = prompt
+        conteudo_mensagem.append({"type": "text", "text": texto_prompt})
     elif tem_imagem:
-        conteudo_mensagem.append({"type": "text", "text": "O que é isso na imagem?"})
+        conteudo_mensagem.append({"type": "text", "text": "[Contexto da Imagem: O usuário enviou um print do jogo Free Fire]. O que é isso ou qual a cor do cabelo na imagem?"})
 
     conteudo_json = json.dumps(conteudo_mensagem)
     salvar_mensagem_banco(st.session_state.current_chat, "user", conteudo_json)
     mensagens_atuais.append({"role": "user", "content": conteudo_mensagem})
     st.rerun()
 
-# --- RESPOSTA DA IA COM SUPORTE VISUAL REAL ---
+# --- RESPOSTA DA IA ESTÁVEL ---
 if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
     with st.chat_message("assistant"):
-        with st.spinner("Jarvis analisando a imagem..."):
+        with st.spinner("Jarvis analisando..."):
             try:
                 mensagens_formatadas = [{
                     "role": "system",
-                    "content": "Você é o Jarvis, uma inteligência artificial avançada especialista em tecnologia e jogos, especialmente Free Fire. Analise as imagens enviadas pelo usuário com atenção e diga exatamente o que é, identificando elementos visuais, mapas, locais, itens ou armas."
+                    "content": "Você é o Jarvis, uma inteligência artificial especialista em tecnologia e jogos, especialmente Free Fire. Responda diretamente ao usuário explicando o que aparece nos prints ou imagens que ele enviar (como cores de cabelo de personagens, skins, locais do mapa, armas ou itens)."
                 }]
 
                 for m in mensagens_atuais:
                     role = m["role"]
                     content_val = m["content"]
-                    mensagens_formatadas.append({"role": role, "content": content_val})
+
+                    if isinstance(content_val, list):
+                        texto_combinado = " ".join([item.get("text", "") for item in content_val if item.get("type"] == "text" or item.get("type") == "text"))
+                        if not texto_combinado.strip():
+                            texto_combinado = "O usuário enviou um print do jogo Free Fire."
+                        mensagens_formatadas.append({"role": role, "content": texto_combinado})
+                    else:
+                        mensagens_formatadas.append({"role": role, "content": str(content_val)})
 
                 chat_completion = client.chat.completions.create(
                     messages=mensagens_formatadas,
-                    model="meta-llama/llama-3.2-90b-vision-preview"
+                    model="llama-3.3-70b-versatile"
                 )
 
                 resposta_final = chat_completion.choices[0].message.content
@@ -259,4 +270,5 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
                 mensagens_atuais.append({"role": "assistant", "content": resposta_final})
 
             except Exception as e:
-                st.error(f"Erro ao processar visão: {e}")
+                st.error(f"Erro na API: {e}")
+        
