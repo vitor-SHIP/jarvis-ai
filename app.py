@@ -174,7 +174,7 @@ st.markdown(
             <span style="font-size: 24px;">🤖</span>
             <div>
                 <h3 style="margin: 0; color: #e3e3e3; font-size: 18px;">Jarvis AI</h3>
-                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Llama Vision</p>
+                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Qwen Vision</p>
             </div>
         </div>
         <div style="background-color: #131314; padding: 5px 12px; border-radius: 20px; border: 1px solid #444;">
@@ -241,7 +241,7 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
   mensagens_atuais.append({"role": "user", "content": conteudo_mensagem})
   st.rerun()
 
-# --- RESPOSTA DA IA COM VISÃO ATUALIZADA ---
+# --- RESPOSTA DA IA COM O MODELO ATUALIZADO DE VISÃO ---
 if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
   with st.chat_message("assistant"):
       with st.spinner("Jarvis analisando..."):
@@ -256,7 +256,7 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
 
               chat_completion = client.chat.completions.create(
                   messages=mensagens_formatadas,
-                  model="meta-llama/llama-3.2-90b-vision-instruct" # Modelo atualizado e ativo na Groq
+                  model="qwen/qwen3.6-27b" # Modelo multimídia atualizado e ativo na Groq
               )
 
               resposta_final = chat_completion.choices[0].message.content
