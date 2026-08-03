@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 import sqlite3
 from io import BytesIO
@@ -20,7 +21,7 @@ if not groq_key:
 
 client = Groq(api_key=groq_key) if groq_key else None
 
-# --- BANCO DE DADOS ROBUSTO ---
+# --- BANCO DE DADOS ---
 def init_db():
   try:
       conn = sqlite3.connect("jarvis_chat.db")
@@ -57,7 +58,11 @@ def carregar_chats_do_banco():
               )
               mensagens = []
               for role, content in cursor.fetchall():
-                  mensagens.append({"role": role, "content": content})
+                  try:
+                      content_parsed = json.loads(content)
+                  except:
+                      content_parsed = content
+                  mensagens.append({"role": role, "content": content_parsed})
               chats[nome] = mensagens
       conn.close()
       return chats
@@ -223,10 +228,7 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
   elif tem_imagem:
       conteudo_mensagem.append({"type": "text", "text": "Analise esta imagem para mim."})
 
-  # Salva a estrutura completa em JSON no banco para garantir que nunca corrompa
-  import json
   conteudo_json = json.dumps(conteudo_mensagem)
-  
   salvar_mensagem_banco(st.session_state.current_chat, "user", conteudo_json)
   mensagens_atuais.append({"role": "user", "content": conteudo_mensagem})
   st.rerun()
@@ -241,20 +243,24 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
                   "content": "Você é o Jarvis, uma inteligência artificial avançada e prestativa. Responda de forma direta e concisa."
               }]
 
-              for m in mensagens_atuais:
+              # Percorre o histórico e trata mensagens antigas para evitar erro de formato na API
+              for i, m in enumerate(mensagens_atuais):
+                  role = m["role"]
                   content_val = m["content"]
-                  
-                  # Se estiver em formato JSON salvo, converte para lista de blocos (texto/imagem)
-                  if isinstance(content_val, str):
-                      try:
-                          content_val = json.loads(content_val)
-                      except:
-                          content_val = content_val
+                  is_last = (i == len(mensagens_atuais) - 1)
 
-                  mensagens_formatadas.append({
-                      "role": m["role"], 
-                      "content": content_val
-                  })
+                  if isinstance(content_val, list):
+                      if is_last:
+                          # Mantém a imagem apenas na ÚLTIMA mensagem enviada
+                          mensagens_formatadas.append({"role": role, "content": content_val})
+                      else:
+                          # Converte mensagens antigas com imagem apenas para texto para a API não rejeitar
+                            texto_acumulado = " ".join([item["text"] for item in content_val if item.get("type") == "text"])
+                            if not texto_acumulado:
+                                texto_acumulado = "[Imagem enviada anteriormente]"
+                            mensagens_formatadas.append({"role": role, "content": texto_acumulado})
+                  else:
+                      mensagens_formatadas.append({"role": role, "content": str(content_val)})
 
               chat_completion = client.chat.completions.create(
                   messages=mensagens_formatadas,
