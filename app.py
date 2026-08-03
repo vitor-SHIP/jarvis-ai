@@ -174,7 +174,7 @@ st.markdown(
             <span style="font-size: 24px;">🤖</span>
             <div>
                 <h3 style="margin: 0; color: #e3e3e3; font-size: 18px;">Jarvis AI</h3>
-                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Qwen Vision</p>
+                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Llama 3.3</p>
             </div>
         </div>
         <div style="background-color: #131314; padding: 5px 12px; border-radius: 20px; border: 1px solid #444;">
@@ -241,10 +241,10 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
   mensagens_atuais.append({"role": "user", "content": conteudo_mensagem})
   st.rerun()
 
-# --- RESPOSTA DA IA COM O MODELO ATUALIZADO DE VISÃO ---
+# --- RESPOSTA DA IA ULTRA-RÁPIDA ---
 if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
   with st.chat_message("assistant"):
-      with st.spinner("Jarvis analisando..."):
+      with st.spinner("Jarvis pensando..."):
           try:
               mensagens_formatadas = [{
                   "role": "system",
@@ -263,8 +263,7 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
 
               chat_completion = client.chat.completions.create(
                   messages=mensagens_formatadas,
-                  model="qwen/qwen3.6-27b",
-                  reasoning_format="hidden"
+                  model="llama-3.3-70b-versatile"
               )
 
               resposta_final = chat_completion.choices[0].message.content
@@ -274,4 +273,4 @@ if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
               mensagens_atuais.append({"role": "assistant", "content": resposta_final})
 
           except Exception as e:
-              st.error(f"Erro na API ao analisar imagem: {e}")
+              st.error(f"Erro na API: {e}")
