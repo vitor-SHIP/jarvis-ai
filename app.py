@@ -4,21 +4,23 @@ import os
 import sqlite3
 from io import BytesIO
 from dotenv import load_dotenv
-from groq import Groq
+from google import genai
+from google.genai import types
 from PIL import Image
 import streamlit as st
 
 # Carrega as chaves
 load_dotenv()
-groq_key = os.environ.get("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
+gemini_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
 
 # Configuração da página
 st.set_page_config(page_title="Jarvis AI", page_icon="🤖", layout="wide")
 
-if not groq_key:
-    st.error("Configure sua chave do Groq nas Secrets do Streamlit ou no arquivo .env")
+if not gemini_key:
+    st.error("Configure sua chave do Google Gemini (GEMINI_API_KEY) nas Secrets do Streamlit ou no arquivo .env")
 
-client = Groq(api_key=groq_key) if groq_key else None
+# Inicializa o cliente do Gemini
+client = genai.Client(api_key=gemini_key) if gemini_key else None
 
 # --- BANCO DE DADOS ---
 def init_db():
@@ -150,7 +152,7 @@ st.markdown(
             <span style="font-size: 24px;">🤖</span>
             <div>
                 <h3 style="margin: 0; color: #e3e3e3; font-size: 18px;">Jarvis AI</h3>
-                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Llama 3.3</p>
+                <p style="margin: 0; color: #8e918f; font-size: 12px;">Sistema Operacional Ativo &bull; Google Gemini Vision</p>
             </div>
         </div>
         <div style="background-color: #131314; padding: 5px 12px; border-radius: 20px; border: 1px solid #444;">
@@ -169,7 +171,7 @@ mensagens_atuais = st.session_state.chats[st.session_state.current_chat]
 
 if not mensagens_atuais:
     st.markdown("<h2 style='text-align: center; color: #c4c7c5; margin-top: 10vh;'>Olá, Flávio.</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #8e918f;'>Como posso ajudar você hoje? Envie um texto ou anexe uma foto.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #8e918f;'>Como posso ajudar você hoje? Envie um texto ou anexe uma foto do Free Fire.</p>", unsafe_allow_html=True)
 
 for message in mensagens_atuais:
     with st.chat_message(message["role"]):
@@ -186,6 +188,7 @@ for message in mensagens_atuais:
 if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
     conteudo_mensagem = []
     tem_imagem = False
+    imagem_pil = None
 
     if uploaded_images:
         for img_file in uploaded_images:
@@ -194,6 +197,7 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
                 if image.mode != "RGB":
                     image = image.convert("RGB")
                 image.thumbnail((1024, 1024))
+                imagem_pil = image # Guarda para o Gemini
                 
                 buffered = BytesIO()
                 image.save(buffered, format="JPEG", quality=85)
@@ -211,6 +215,7 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
             if image.mode != "RGB":
                 image = image.convert("RGB")
             image.thumbnail((1024, 1024))
+            imagem_pil = image
             
             buffered = BytesIO()
             image.save(buffered, format="JPEG", quality=85)
@@ -223,48 +228,62 @@ if prompt := st.chat_input("Digite uma mensagem ou envie uma imagem..."):
             st.error(f"Erro ao processar foto da câmera: {e}")
 
     if prompt:
-        texto_final = f"[Print do jogo Free Fire anexado]. Pergunta: {prompt}"
-        conteudo_mensagem.append({"type": "text", "text": texto_final})
+        conteudo_mensagem.append({"type": "text", "text": prompt})
     elif tem_imagem:
-        conteudo_mensagem.append({"type": "text", "text": "[Print do jogo Free Fire anexado]. Analise a imagem, diga o que aparece e qual é a cor do cabelo do personagem central."})
+        conteudo_mensagem.append({"type": "text", "text": "O que tem nesta imagem do Free Fire?"})
 
     conteudo_json = json.dumps(conteudo_mensagem)
     salvar_mensagem_banco(st.session_state.current_chat, "user", conteudo_json)
     mensagens_atuais.append({"role": "user", "content": conteudo_mensagem})
     st.rerun()
 
-# --- RESPOSTA DA IA ESTÁVEL (Llama 3.3 Versatile) ---
+# --- RESPOSTA DA IA COM O GOOGLE GEMINI (VISÃO REAL) ---
 if mensagens_atuais and mensagens_atuais[-1]["role"] == "user" and client:
     with st.chat_message("assistant"):
-        with st.spinner("Jarvis analisando..."):
+        with st.spinner("Jarvis analisando a imagem visualmente..."):
             try:
-                mensagens_formatadas = [{
-                    "role": "system",
-                    "content": "Você é o Jarvis, uma inteligência artificial avançada especialista em jogos, especialmente Free Fire. O usuário envia prints do jogo. Responda diretamente ao usuário descrevendo o cenário, o personagem em destaque, e identifique claramente a cor do cabelo do personagem visível no print."
-                }]
-
+                # Prepara o histórico para o formato do Gemini
+                contents_historico = []
+                
                 for m in mensagens_atuais:
                     role = m["role"]
                     content_val = m["content"]
-
+                    
+                    # Converte o papel para o padrão aceito pelo SDK do Gemini (user / model)
+                    gemini_role = "user" if role == "user" else "model"
+                    
+                    partes_conteudo = []
                     if isinstance(content_val, list):
-                        texto_combinado = " ".join([item.get("text", "") for item in content_val if item.get("type") == "text"])
-                        if not texto_combinado.strip():
-                            texto_combinado = "O usuário enviou um print do Free Fire."
-                        mensagens_formatadas.append({"role": role, "content": texto_combinado})
+                        for item in content_val:
+                            if item.get("type") == "text":
+                                partes_conteudo.append(item["text"])
+                            elif item.get("type") == "image_url":
+                                # Converte a URL base64 de volta para objeto PIL Image para o Gemini analisar perfeitamente
+                                header, encoded = item["image_url"]["url"].split(",", 1)
+                                img_bytes = base64.b64decode(encoded)
+                                img_obj = Image.open(BytesIO(img_bytes))
+                                partes_conteudo.append(img_obj)
                     else:
-                        mensagens_formatadas.append({"role": role, "content": str(content_val)})
+                        partes_conteudo.append(str(content_val))
+                        
+                    contents_historico.append(types.Content(
+                        role=gemini_role,
+                        parts=[types.Part.from_bytes(data=p.tobytes(), mime_type="image/jpeg") if isinstance(p, Image.Image) else types.Part.from_text(text=str(p)) for p in partes_conteudo]
+                    ))
 
-                chat_completion = client.chat.completions.create(
-                    messages=mensagens_formatadas,
-                    model="llama-3.3-70b-versatile"
+                response = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=contents_historico,
+                    config=types.GenerateContentConfig(
+                        system_instruction="Você é o Jarvis, uma inteligência artificial especialista em jogos, especialmente Free Fire. Você consegue ver perfeitamente as imagens enviadas pelo usuário, identificando skins, cores de cabelo, personagens, armas e elementos visuais com total precisão."
+                    )
                 )
 
-                resposta_final = chat_completion.choices[0].message.content
+                resposta_final = response.text
                 st.markdown(resposta_final)
 
                 salvar_mensagem_banco(st.session_state.current_chat, "assistant", resposta_final)
                 mensagens_atuais.append({"role": "assistant", "content": resposta_final})
 
             except Exception as e:
-                st.error(f"Erro na API: {e}")
+                st.error(f"Erro ao processar com o Gemini: {e}")
