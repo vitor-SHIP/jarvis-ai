@@ -4,9 +4,11 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import streamlit as st
 
+# Carrega variáveis de ambiente locais (se houver) e busca a chave do Gemini
 load_dotenv()
 gemini_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
 
+# Configuração da página do Streamlit
 st.set_page_config(page_title="Jarvis - Rastreio & Chat", page_icon="🧭", layout="wide")
 
 if gemini_key:
