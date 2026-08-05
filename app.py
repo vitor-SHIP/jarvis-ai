@@ -4,11 +4,9 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 import streamlit as st
 
-# Carrega variáveis de ambiente locais e busca a chave do Gemini
 load_dotenv()
 gemini_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
 
-# Configuração da página do Streamlit
 st.set_page_config(page_title="Jarvis - Rastreio & Chat", page_icon="🧭", layout="wide")
 
 if gemini_key:
@@ -163,19 +161,15 @@ if prompt := st.chat_input("Digite sua mensagem, dúvida ou item para rastrear..
     st.rerun()
 
 # --- RESPOSTA DA IA ---
+# Processa apenas se a última mensagem for do usuário e não houver resposta correspondente gerada ainda
 if mensagens_atuais and mensagens_atuais[-1]["role"] == "user":
     with st.chat_message("assistant"):
         with st.spinner("Jarvis processando..."):
             try:
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 
-                historico_chat = []
-                for m in mensagens_atuais[:-1]:
-                    role_map = "user" if m["role"] == "user" else "model"
-                    historico_chat.append({"role": role_map, "parts": [m["content"]]})
-                
-                chat = model.start_chat(history=historico_chat)
-                response = chat.send_message(mensagens_atuais[-1]["content"])
+                # Envia direto o texto atual para evitar conflito de histórico corrompido
+                response = model.generate_content(mensagens_atuais[-1]["content"])
 
                 if response and response.text:
                     resposta_final = response.text
