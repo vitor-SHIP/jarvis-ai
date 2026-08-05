@@ -100,6 +100,20 @@ with st.sidebar:
         st.session_state.current_chat = novo_nome
         st.rerun()
 
+    # Botão de emergência para limpar o banco travado direto na interface
+    if st.button("🧹 Limpar Histórico / Destravar", use_container_width=True):
+        try:
+            conn = sqlite3.connect("jarvis_rastreio.db")
+            cursor = conn.cursor()
+            cursor.execute("DROP TABLE IF EXISTS chats")
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+        st.session_state.chats = {"Conversa Principal": []}
+        st.session_state.current_chat = "Conversa Principal"
+        st.rerun()
+
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("**Histórico**")
 
@@ -160,25 +174,24 @@ if prompt := st.chat_input("Digite sua mensagem, dúvida ou item para rastrear..
     mensagens_atuais.append({"role": "user", "content": prompt})
     st.rerun()
 
-# --- RESPOSTA DA IA ---
-# Processa apenas se a última mensagem for do usuário e não houver resposta correspondente gerada ainda
+# --- RESPOSTA DA IA (COM PROTEÇÃO CONTRA LOOP) ---
 if mensagens_atuais and mensagens_atuais[-1]["role"] == "user":
-    with st.chat_message("assistant"):
-        with st.spinner("Jarvis processando..."):
-            try:
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                
-                # Envia direto o texto atual para evitar conflito de histórico corrompido
-                response = model.generate_content(mensagens_atuais[-1]["content"])
+    # Verifica se a penúltima mensagem já é uma resposta do assistant para evitar loop infinito
+    if len(mensagens_atuais) < 2 or mensagens_atuais[-2]["role"] != "assistant":
+        with st.chat_message("assistant"):
+            with st.spinner("Jarvis processando..."):
+                try:
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    response = model.generate_content(mensagens_atuais[-1]["content"])
 
-                if response and response.text:
-                    resposta_final = response.text
-                    st.markdown(resposta_final)
-                    salvar_mensagem(st.session_state.current_chat, "assistant", resposta_final)
-                    mensagens_atuais.append({"role": "assistant", "content": resposta_final})
-                    st.rerun()
-                else:
-                    st.error("A IA não retornou nenhuma resposta.")
+                    if response and response.text:
+                        resposta_final = response.text
+                        st.markdown(resposta_final)
+                        salvar_mensagem(st.session_state.current_chat, "assistant", resposta_final)
+                        mensagens_atuais.append({"role": "assistant", "content": resposta_final})
+                        st.rerun()
+                    else:
+                        st.error("A IA não retornou nenhuma resposta.")
 
-            except Exception as e:
-                st.error(f"Erro na comunicação com a API: {e}")
+                except Exception as e:
+                    st.error(f"Erro na comunicação com a API: {e}")
